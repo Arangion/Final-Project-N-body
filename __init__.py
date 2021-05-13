@@ -18,4 +18,5 @@ def main(N, tStart, tEnd, tInc, G, softening):
     PP.particleParticle(position,velocity, acceleration, mass, tInc, G, softening, tStart, tEnd)
 
 
-main(100, 0.0, 10.0, 0.01, 6.674*(10**-11), 0.01)
+main(1000, 0.0, 10.0, 0.01, 1.0, 0.01)
+#6.674*(10**-11)

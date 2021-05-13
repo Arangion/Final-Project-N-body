@@ -16,9 +16,9 @@ def plotPoints3D(runTime):
     sim = plt.figure()
     ax = sim.add_subplot(111, projection="3d")
     sca, = ax.plot([],[],[],"o", markersize=2)
-    ax.set_xlim3d(-3,3)
-    ax.set_ylim3d(-3,3)
-    ax.set_zlim3d(-3,3)
+    ax.set_xlim3d(-20,20)
+    ax.set_ylim3d(-20,20)
+    ax.set_zlim3d(-20,20)
     def update_plot(i, x, y, z):
         sca.set_data(x[i], y[i])
         sca.set_3d_properties(z[i])
@@ -37,6 +37,6 @@ def plotPoints2D(runTime):
         sca.set_data(x[i], y[i])
         return sca,
     
-    plot = animation.FuncAnimation(sim, update_plot, runTime, fargs=(scatterX, scatterY), blit=True)
+    plot = animation.FuncAnimation(sim, update_plot, runTime, fargs=(scatterX, scatterY), interval = 50, blit=True)
 
     plt.show()

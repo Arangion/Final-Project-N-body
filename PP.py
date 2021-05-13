@@ -44,8 +44,8 @@ def particleParticle(position, velocity, acceleration, mass, tInc, G, softening,
 
         Graphing.updatePoints(position)
 
-   # Graphing.plotPoints3D(int(tEnd/tInc))
-    Graphing.plotPoints2D(int(tEnd/tInc))
+    Graphing.plotPoints3D(int(tEnd/tInc))
+    #Graphing.plotPoints2D(int(tEnd/tInc))
 
 
 
