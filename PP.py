@@ -1,6 +1,5 @@
 import numpy as np
 import Graphing
-import pandas as pd
 
 def calcAcc(position, mass, G, softening):
 
@@ -23,13 +22,14 @@ def calcAcc(position, mass, G, softening):
 
     return(np.concatenate((aX, aY, aZ), axis=1))
 
-def particleParticle(position, velocity, acceleration, mass, tInc, G, softening, tStart, tEnd):
+def particleParticle(N, position, velocity, mass, tInc, G, softening, tStart, tEnd):
+    
+    acceleration = calcAcc(position, mass, G, softening)
     
     Graphing.updatePoints(position)
+    
     t = tStart
-    num = 0
-    p1 = position  
-    weird = 0
+
     while(t < tEnd):    
 
         velocity += (acceleration * (tInc/2.0))
@@ -44,8 +44,8 @@ def particleParticle(position, velocity, acceleration, mass, tInc, G, softening,
 
         Graphing.updatePoints(position)
 
-    Graphing.plotPoints3D(int(tEnd/tInc))
-    #Graphing.plotPoints2D(int(tEnd/tInc))
+    #Graphing.plotPoints3D(int(tEnd/tInc))
+    Graphing.plotPoints2D(int(tEnd/tInc))
 
 
 

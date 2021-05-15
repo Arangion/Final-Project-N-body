@@ -1,92 +1,213 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-import scipy as sp
+import scipy.interpolate as ip
 import math
-import PP
+import Graphing
 
-def particleMesh(N, position, velocity, acceleration, mass, G):
-    # I decided to set the volume the simulation occurs in as a cube with length the longest
-    # between x,y,z as particles leaving the system requires an extra case to handle, and I
-    # don't want to deal with that yet so by having the particles more centered around the
-    # middle it prevents that
+def _power_shift(k, n):
+    # power_shift calcuates the wavenumber value to be used in kernel
+    save = np.seterr(divide = 'ignore')
+    a = np.where(k == 0, 0, k**n)
+    np.seterr(**save)
 
-    sideLength = max((position[:,0].max() - position[:,0].min()), position[:,1].max() - position[:,1].min(), position[:,2].max() - position[:,2].min())
+    return a
+
+def wavenumber(v):
+    # Caluclates wavenumber based on number of particles
+    N = v[0]
+    i = np.indices(v)
+
+    return(np.where(i > N/2, i-N, i))
+
+def potential_integration(x, y, z, F, g, bL):
+    # calculates the x,y,z difference between potential for gradient
+    deltaX = F[int(g[x[1],0]), int(g[y[0],1]), int(g[z[0],2])] - F[int(g[x[2],0]), int(g[y[0],1]), int(g[z[0],2])]
+    deltaY = F[int(g[x[0],0]), int(g[y[1],1]), int(g[z[0],2])] - F[int(g[x[0],0]), int(g[y[2],1]), int(g[z[0],2])]
+    deltaZ = F[int(g[x[0],0]), int(g[y[0],1]), int(g[z[1],2])] - F[int(g[x[0],0]), int(g[y[0],1]), int(g[z[2],2])]
+
+    return (np.array([deltaX/(2*bL), deltaY/(2*bL), deltaZ/(2*bL)]))
+
+
+def potential_calc_(F, bL, g, i, kv):
     
-    volume = sideLength**3
-
-    negative = math.floor(-sideLength/2)
-    positive = math.ceil(sideLength/2)
-
-    xc, cellLength = np.linspace(negative, positive, num=int(sideLength), retstep = True) #These are positions of the cell-points x that are used to calculate density
-    yc = np.linspace(negative, positive, num=int(sideLength)) # the cell length is also used for finding which cell a particle is closest to
-    zc = np.linspace(negative, positive, num=int(sideLength))
-    cellVolume = cellLength**3
-
-    # creates an initial meshgrid of the positions and cell points,
-    # creates two arrays of the same dimensions, N * len(xc)
-    # the two are then subtracted to find which cell point is closest, and using
-    # the index of that value the cell point is found
-
-    cX, pX = np.meshgrid(xc, position[:,0])
-    closestX = pX - cX
-    chargesX = np.nonzero(np.piecewise(closestX, [(np.abs(closestX) <= cellLength/2), (np.abs(closestX) > cellLength/2)], [1, 0]))
-
-    #distanceX = np.abs(closestX).min(axis = 1)
-    #pointAssignments = np.argmin(np.abs(closestX), axis = 1)
-    cY, pY = np.meshgrid(yc, position[:,1])
-    closestY = pY - cY
-    chargesY = np.nonzero(np.piecewise(closestY, [(np.abs(closestY) <= cellLength/2), (np.abs(closestY) > cellLength/2)], [1, 0]))
-
-    #distanceY = np.abs(closestY).min(axis = 1)
-
-    cZ, pZ = np.meshgrid(zc, position[:,2])
-    closestZ = pZ - cZ
-    chargesZ = np.nonzero(np.piecewise(closestZ, [(np.abs(closestZ) <= cellLength/2), (np.abs(closestZ) > cellLength/2)], [1, 0], [1, 0]))
-    #distanceZ = np.abs(closestZ).min(axis = 1)
-    print(closestZ)
-    #print(closestX[20], cellLength/2)
-    #print(chargesX[0])
-    #print(chargesY)
-    #print(chargesZ)
-
-
-    xm, ym, zm = np.meshgrid(xc, yc, zc)
-
+    gxyz = potential_integration([i, i+1, i-1], [i, i+1, i-1], [i, i+1, i-1], F, g, bL)
     
-    #Ideally this is what I have to more or less finish
-    #cellPotentials = Density*4*math.pi*G
-    #print(cellPotentials)
-    #gradient = sp.fft.fftn(cellPotentials)
-    #print(gradient)
+    gxyz_ = potential_integration([i, i+1, i-1], [i, i+1, i-1], [i+1, i+2, i], F, g, bL)
 
-
-
-    #This is just a plotting for xm,ym,zm that I used for testing
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection = '3d')
-    ax.scatter(xm,ym,zm)
-    plt.show()
-
-def testPM(N, tStart, tEnd, tInc, G, softening):
-    #Position is an array of N particles with [:,0],[:,1],[:,2] being the x,y,z cordinates respectively
-    #Velocity follows the same structure as position
-    #mass is an 2-D array of N particles and their corresponding mass value
-    #Acceleration is structured the same as position
+    gxy_z = potential_integration([i, i+1, i-1], [i+1, i+2, i], [i, i+1, i-1], F, g, bL)
     
-    position = 1 + 2 * np.random.randn(N,3)
-    velocity = np.random.randn(N,3)
-    mass = 10 * abs(np.random.randn(N,1))
-    acceleration = PP.calcAcc(position, mass, G, softening)
-    particleMesh(N, position, velocity, acceleration, mass, G)
+    gxy_z_ = potential_integration([i, i+1, i-1], [i+1, i+2, i], [i+1, i+2, i], F, g, bL)
+    
+    gx_yz = potential_integration([i+1, i+2, i], [i, i+1, i-1], [i, i+1, i-1], F, g, bL)
+    
+    gx_yz_ = potential_integration([i+1, i+2, i], [i, i+1, i-1], [i+1, i+2, i], F, g, bL)
 
-# 100 particles is my preffered testing value, as more or less 
-# makes the numbers either too small or too big for testing purposes
-# Timestep has not been implemented yet for particleMesh
-# G is gravitation constent don't change
-# softening is a leftover from the Particle-Particle method, doesn't have any use yet 
-# but I left it as it can be useful for fixing acceleration calculation
-# issues from objects being too close to another 
+    gx_y_z = potential_integration([i+1, i+2, i], [i+1, i+2, i], [i, i+1, i-1], F, g, bL)
+
+    gx_y_z_ = potential_integration([i+1, i+2, i], [i+1, i+2, i], [i+1, i+2, i], F, g, bL)
+
+    gp = kv[0]*gxyz + kv[1]*gxyz_ + kv[2]*gxy_z + kv[3]*gxy_z_ + kv[4]*gx_yz + kv[5]*gx_yz_ + kv[6]*gx_y_z + kv[7]*gx_y_z_
+
+    return(gp)
+
+def potential_calc_rollu(F, bL, g, i, kv, N):
+    if(i == N-1):
+
+        gxyz = potential_integration([i, 0, i-1], [i, 0, i-1], [i, 0, i-1], F, g, bL)
+    
+        gxyz_ = potential_integration([i, 0, i-1], [i, 0, i-1], [0, 1, i], F, g, bL)
+    
+        gxy_z = potential_integration([i, 0, i-1], [0, 1, i], [i, 0, i-1], F, g, bL)
+    
+        gxy_z_ = potential_integration([i, 0, i-1], [0, 1, i], [0, 1, i], F, g, bL)
+
+        gx_yz = potential_integration([0, 1, i], [i, 0, i-1], [i, 0, i-1], F, g, bL)
+
+        gx_yz_ = potential_integration([0, 1, i], [i, 0, i-1], [0, 1, i], F, g, bL)
+
+        gx_y_z = potential_integration([0, 1, i], [0, 1, i], [i, 0, i-1], F, g, bL)
+
+        gx_y_z_ = potential_integration([0, 1, i], [0, 1, i], [0, 1, i], F, g, bL)
+
+    if(i == N-2):
+
+        gxyz = potential_integration([i, i+1, i-1], [i, i+1, i-1], [i, i+1, i-1], F, g, bL)
+    
+        gxyz_ = potential_integration([i, i+1, i-1], [i, i+1, i-1], [i+1, 0, i], F, g, bL)
+
+        gxy_z = potential_integration([i, i+1, i-1], [i+1, 0, i], [i, i+1, i-1], F, g, bL)
+    
+        gxy_z_ = potential_integration([i, i+1, i-1], [i+1, 0, i], [i+1, 0, i], F, g, bL)
+    
+        gx_yz = potential_integration([i+1, 0, i], [i, i+1, i-1], [i, i+1, i-1], F, g, bL)
+    
+        gx_yz_ = potential_integration([i+1, 0, i], [i, i+1, i-1], [i+1, 0, i], F, g, bL)
+
+        gx_y_z = potential_integration([i+1, 0, i], [i+1, 0, i], [i, i+1, i-1], F, g, bL)
+
+        gx_y_z_ = potential_integration([i+1, 0, i], [i+1, 0, i], [i+1, 0, i], F, g, bL)
+
+    gp = (kv[0]*gxyz + kv[1]*gxyz_ + kv[2]*gxy_z + kv[3]*gxy_z_ + kv[4]*gx_yz + kv[5]*gx_yz_ + kv[6]*gx_y_z + kv[7]*gx_y_z_)*-1
+
+    return(gp)
 
 
-#testPM(100, 0.0, 100, 0.1, 6.674*(10**-11), 0.1)
+def interpolate(F, N, bL, xBins, yBins, zBins, g, position):
+    # del_x, del_y, and del_z find the distance between the gridpoint and the particle
+    del_x = lambda i: xBins[int(g[i,0])] - position[i,0]
+    del_y = lambda i: yBins[int(g[i,1])] - position[i,1]
+    del_z = lambda i: zBins[int(g[i,2])] - position[i,2]
+    
+    pA = np.zeros((N,3))
+    # Each k value is the positional distances between the grid points and particle
+    for i in range(N):
+        kv = []
+        kv.append((bL-del_x(i))*(bL-del_y(i))*(bL-del_z(i)))
+        kv.append((bL-del_x(i))*(bL-del_y(i))*(del_z(i)))
+        kv.append((bL-del_x(i))*(del_y(i))*(bL-del_z(i)))
+        kv.append((bL-del_x(i))*(del_y(i))*(del_z(i)))
+        kv.append((del_x(i))*(bL-del_y(i))*(bL-del_z(i)))
+        kv.append((del_x(i))*(bL-del_y(i))*(del_z(i)))
+        kv.append((del_x(i))*(del_y(i))*(bL-del_z(i)))
+        kv.append((del_x(i))*(del_y(i))*(del_z(i)))
+
+        if(i >= N-2):
+            # potential_calc_ calculates the derivative of the grid distance 
+            # to find the gradient of gravitation potential on the particle
+            pA[i] = potential_calc_rollu(F, bL, g, i, kv, N)
+        else:
+            pA[i] = potential_calc_(F, bL, g, i, kv)
+    return(pA)
+
+
+def allocateDensity(position, sideLength, N):
+    dr = position - np.floor(position)
+    # Generate histograms of particels and gridpoints to determine density based on distance to particle
+    # Follows Cloud in Cloud method, which allocates to the nearest 8 gridpoints in a 3d space
+    
+    CIC = np.zeros((sideLength,sideLength,sideLength))
+    h, e = np.histogramdd(position, bins=int(sideLength), range = [[0, N], [0,N], [0,N]], weights=(1-dr[:,0]) * (1-dr[:,1]) * (1-dr[:,2]))
+    CIC += h
+    h, e = np.histogramdd(position,bins=int(sideLength), range = [[0, N], [0,N], [0,N]], weights=(dr[:,0]) * (1-dr[:,1]) * (1-dr[:,2]))
+    CIC += h
+    h, e = np.histogramdd(position,bins=int(sideLength), range = [[0, N], [0,N], [0,N]], weights=(dr[:,0]) * (dr[:,1]) * (1-dr[:,2]))
+    CIC += h
+    h, e = np.histogramdd(position,bins=int(sideLength), range = [[0, N], [0,N], [0,N]], weights=(dr[:,0]) * (1-dr[:,1]) * (dr[:,2]))
+    CIC += h
+    h, e = np.histogramdd(position,bins=int(sideLength), range = [[0, N], [0,N], [0,N]], weights=(1-dr[:,0]) * (dr[:,1]) * (1-dr[:,2]))
+    CIC += h
+    h, e = np.histogramdd(position,bins=int(sideLength), range = [[0, N], [0,N], [0,N]], weights=(1-dr[:,0]) * (dr[:,1]) * (dr[:,2]))
+    CIC += h
+    h, e = np.histogramdd(position,bins=int(sideLength), range = [[0, N], [0,N], [0,N]], weights=(1-dr[:,0]) * (1-dr[:,1]) * (dr[:,2]))
+    CIC += h
+    h, e = np.histogramdd(position,bins=int(sideLength), range = [[0, N], [0,N], [0,N]], weights=(dr[:,0]) * (dr[:,1]) * (dr[:,2]))
+    CIC += h
+
+    return CIC
+
+def calculateMesh(N, position, velocity, mass, G):
+
+    #Set side length of grid to 10 units
+    sideLength=10
+
+    #Allocate Denisty based on particle distances to each gridpoint in mesh
+    density = allocateDensity(position, sideLength, N)
+    #add the mass to the gridpoint position based on desnity
+    density *= mass[0]
+    density -= 1.0
+
+    #Mesh position histogram, e has the distances between each gridpoint xyz
+    h, e = np.histogramdd(position, bins=int(sideLength))
+    ex, ey, ez = e
+
+    #A Fast Fournier Transform is used to move the density field to the frequency domain
+    PE = np.fft.fftn(density)
+    # Calculates the wave of the simulation, waveshape determines wavelength xyz
+    waveshape = (sideLength,) *3
+    wave = (wavenumber(waveshape)) * 2*math.pi/sideLength
+    
+    # kernel is the reciprocal wavenumer squared
+    kernel = -(_power_shift((wave**2).sum(axis=0), -1.))
+    
+    # Force is then caluclated from the real Inverse Fast Fournier Transform allowing for Gravitation Constant
+    F = np.fft.ifftn(PE*kernel).real * G/sideLength
+    
+    #Grav is an array for indexing the position in space of each particle, xbins,ybins,zbins are arrays of the bin lengths xyz
+    Grav = np.zeros((N,3))
+    xBins = np.asarray(ex)
+    yBins = np.asarray(ey)
+    zBins = np.asarray(ez)
+    # bL is the length between grid points
+    bL = ex[1] - ex[0]
+    # Allocates potentials of Grid to positions in grid
+    for i in range(N):
+        Grav[i] = (np.argmax(xBins >= position[i,0]) - 1), (np.argmax(yBins >= position[i,1]) - 1), (np.argmax(zBins >= position[i,2]) - 1)
+    # Interpolate calucaltes the force on each particle based on the distance from mesh grid points
+    pG = interpolate(F, N, bL, xBins, yBins, zBins, Grav, position)
+
+    return(pG)
+
+def ParticleMesh(N, position, velocity, mass, tInc, G, softening, tStart, tEnd):
+
+    acceleration = calculateMesh(N, position, velocity, mass, G)
+
+    Graphing.updatePoints(position)
+    
+    t = tStart
+    # Time step integration of particles to simulate movement
+    while(tEnd > t):
+        velocity += (acceleration * (tInc/2.0))
+        
+        position += (velocity * tInc)
+    
+        acceleration = calculateMesh(N, position, velocity, mass, G)
+
+        velocity += (acceleration * (tInc/2.0))
+
+        t += tInc
+
+        Graphing.updatePoints(position)
+
+    Graphing.plotPoints3D(int(tEnd/tInc)) # Run a 3D representation of the simulation
+    #Graphing.plotPoints2D(int(tEnd/tInc)) # Run a 2D representation of the simulation
